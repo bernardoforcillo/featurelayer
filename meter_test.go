@@ -86,6 +86,29 @@ func TestUsageReadOnly(t *testing.T) {
 	}
 }
 
+type failingUsage struct{}
+
+func (failingUsage) Get(context.Context, entitlement.UsageKey) (int64, error) {
+	return 0, errors.New("usage db down")
+}
+func (failingUsage) Increment(context.Context, entitlement.UsageKey, int64, int64) (int64, bool, error) {
+	return 0, false, errors.New("usage db down")
+}
+
+func TestUsageStoreErrorSurface(t *testing.T) {
+	e, _, _ := testEngine(t, WithUsage(failingUsage{}))
+	ctx := context.Background()
+	ec := EvalContext{TenantID: "acme"}
+	d, err := e.Consume(ctx, "api.calls", ec, 1)
+	if err == nil || d.Enabled || d.Reason != ReasonStoreError || d.Err == nil {
+		t.Errorf("Consume store error: %+v %v", d, err)
+	}
+	d, err = e.Usage(ctx, "api.calls", ec)
+	if err == nil || d.Enabled || d.Reason != ReasonStoreError || d.Err == nil {
+		t.Errorf("Usage store error: %+v %v", d, err)
+	}
+}
+
 func d2(s string) time.Time {
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {

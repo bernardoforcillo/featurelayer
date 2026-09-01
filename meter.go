@@ -79,7 +79,7 @@ func (e *Engine) usageRead(ctx context.Context, key catalog.Key, ec EvalContext)
 	total, err := e.usage.Get(ctx, uk)
 	if err != nil {
 		d.Enabled, d.Reason, d.Err = false, ReasonStoreError, err
-		return d, nil
+		return d, err
 	}
 	d.Usage = usageInfo(total, max, period, anchor, now, uk.Period)
 	return d, nil
