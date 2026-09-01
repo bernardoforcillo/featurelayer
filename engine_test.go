@@ -98,6 +98,36 @@ func TestDerivedAttributes(t *testing.T) {
 	}
 }
 
+func TestSpoofedIdentityAttributes(t *testing.T) {
+	ctx := context.Background()
+
+	// Anonymous context on a Free feature: a spoofed Attributes["tenant"]
+	// must not flow into bucketing unguarded. "tenant-2" would land
+	// in-bucket (0.42) on new-editor's 20% rollout if the spoof worked.
+	t.Run("anonymous free feature rollout", func(t *testing.T) {
+		e, _, _ := testEngine(t)
+		d := e.Evaluate(ctx, "new-editor", EvalContext{Attributes: map[string]any{"tenant": "tenant-2"}})
+		if d.Enabled || d.Reason != ReasonFlagRollout || d.Detail != "no bucket attribute" {
+			t.Errorf("spoofed tenant on anonymous context: %+v", d)
+		}
+	})
+
+	// Flags-only engine (no WithSubscriptions): a spoofed Attributes["tenant"]
+	// must not let the caller impersonate a segment member (the "beta" rule
+	// matches tenant "acme" via the beta-testers segment).
+	t.Run("flags-only spoofed segment membership", func(t *testing.T) {
+		snap, err := NewSnapshot(fullTestConfig())
+		if err != nil {
+			t.Fatal(err)
+		}
+		e := New(snap, WithClock(func() time.Time { return tNow }))
+		d := e.Evaluate(ctx, "export.csv", EvalContext{Attributes: map[string]any{"tenant": "acme"}})
+		if d.Enabled || d.Reason != ReasonFlagRollout || d.Detail != "no bucket attribute" {
+			t.Errorf("spoofed tenant on flags-only engine: %+v", d)
+		}
+	})
+}
+
 type failingSubs struct{}
 
 func (failingSubs) Subscription(context.Context, string) (*entitlement.Subscription, error) {

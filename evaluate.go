@@ -100,13 +100,19 @@ func (e *Engine) evaluate(ctx context.Context, snap *Snapshot, key catalog.Key, 
 	}
 	if ec.TenantID != "" {
 		attrs["tenant"] = ec.TenantID
+	} else {
+		delete(attrs, "tenant")
 	}
 	if ec.UserID != "" {
 		attrs["user"] = ec.UserID
+	} else {
+		delete(attrs, "user")
 	}
 	if sub != nil {
 		if pid := snap.resolver.EffectivePlan(sub, now); pid != "" {
 			attrs["plan"] = string(pid)
+		} else {
+			delete(attrs, "plan")
 		}
 		attrs["addons"] = snap.resolver.EffectiveAddOns(sub, now)
 	}
