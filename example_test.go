@@ -37,6 +37,11 @@ func Example() {
 				entitlement.Limited("api.calls", 1000, entitlement.Month),
 			}},
 		},
+		AddOns: []entitlement.AddOn{
+			{ID: "extra-calls", Requires: []entitlement.PlanID{"pro"}, Entitlements: []entitlement.Entitlement{
+				entitlement.Limited("api.calls", 500, entitlement.Month),
+			}},
+		},
 	})
 	if err != nil {
 		panic(err)
@@ -45,14 +50,18 @@ func Example() {
 	subs := entitlement.NewMemSubscriptions()
 	subs.Set(entitlement.Subscription{
 		TenantID:      "acme",
-		Plan:          "pro",
+		Plan:          "free",
+		Trial:         &entitlement.PlanTrial{Plan: "pro", Until: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)},
+		AddOns:        []entitlement.AddOnID{"extra-calls"},
 		BillingAnchor: time.Date(2026, 8, 20, 10, 0, 0, 0, time.UTC),
 	})
 
+	var decisions int
 	engine := featurelayer.New(snap,
 		featurelayer.WithSubscriptions(subs),
 		featurelayer.WithUsage(entitlement.NewMemUsage()),
 		featurelayer.WithClock(func() time.Time { return time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC) }),
+		featurelayer.WithDecisionHook(func(featurelayer.DecisionEvent) { decisions++ }),
 	)
 
 	ctx := context.Background()
@@ -64,7 +73,10 @@ func Example() {
 	d, _ = engine.Consume(ctx, "api.calls", ec, 25)
 	fmt.Println("api.calls used:", d.Usage.Used, "remaining:", d.Usage.Remaining, "resets:", d.Usage.ResetsAt.Format(time.RFC3339))
 
+	fmt.Println("decisions observed:", decisions)
+
 	// Output:
 	// export.csv enabled: true reason: flag_rule
-	// api.calls used: 25 remaining: 975 resets: 2026-09-20T10:00:00Z
+	// api.calls used: 25 remaining: 1475 resets: 2026-09-20T10:00:00Z
+	// decisions observed: 2
 }
