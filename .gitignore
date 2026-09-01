@@ -1,3 +1,4 @@
 *.test
 *.out
 coverage.html
+.claude/
