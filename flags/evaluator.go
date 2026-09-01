@@ -46,5 +46,22 @@ func (ev *Evaluator) matchRegexp(pattern, s string) bool {
 	return re != nil && re.MatchString(s)
 }
 
-// InSegment reports whether attrs belong to the named segment.
-func (ev *Evaluator) InSegment(key string, attrs map[string]any) bool { return false }
+// InSegment reports whether attrs belong to the named segment: member
+// when any of the segment's rules has all its conditions matching.
+// A rule without conditions matches no one; an unknown segment has no
+// members.
+func (ev *Evaluator) InSegment(key string, attrs map[string]any) bool {
+	seg, ok := ev.segments[key]
+	if !ok {
+		return false
+	}
+	for _, r := range seg.Rules {
+		if len(r.Conditions) == 0 {
+			continue
+		}
+		if ev.matchAll(r.Conditions, attrs, true) {
+			return true
+		}
+	}
+	return false
+}
