@@ -1,6 +1,8 @@
 package flags
 
 import (
+	"hash/fnv"
+	"io"
 	"regexp"
 	"sync"
 )
@@ -64,4 +66,15 @@ func (ev *Evaluator) InSegment(key string, attrs map[string]any) bool {
 		}
 	}
 	return false
+}
+
+// bucketOf maps (seed, attr) to a stable bucket in [0, 100) with two
+// decimals: fnv64a(seed + ":" + attr) % 10000 / 100. This algorithm is
+// a public contract; changing it would reshuffle every live rollout.
+func bucketOf(seed, attr string) float64 {
+	h := fnv.New64a()
+	io.WriteString(h, seed)
+	io.WriteString(h, ":")
+	io.WriteString(h, attr)
+	return float64(h.Sum64()%10000) / 100
 }
