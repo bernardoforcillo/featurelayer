@@ -84,3 +84,30 @@ type Outcome struct {
 	Reason  Reason
 	Detail  string
 }
+
+// Active checks the kill switch and the time window. From is
+// inclusive, Until exclusive.
+func (f *Flag) Active(now time.Time) (bool, Outcome) {
+	if !f.Enabled {
+		return false, Outcome{Reason: ReasonOff}
+	}
+	if w := f.Window; w != nil {
+		if (!w.From.IsZero() && now.Before(w.From)) || (!w.Until.IsZero() && !now.Before(w.Until)) {
+			return false, Outcome{Reason: ReasonWindow}
+		}
+	}
+	return true, Outcome{}
+}
+
+// variant returns the named variant, or nil.
+func (f *Flag) variant(key string) *Variant {
+	if key == "" {
+		return nil
+	}
+	for i := range f.Variants {
+		if f.Variants[i].Key == key {
+			return &f.Variants[i]
+		}
+	}
+	return nil
+}

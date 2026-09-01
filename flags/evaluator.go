@@ -5,6 +5,7 @@ import (
 	"io"
 	"regexp"
 	"sync"
+	"time"
 )
 
 // Evaluator evaluates flags against attribute maps. It holds the
@@ -77,4 +78,51 @@ func bucketOf(seed, attr string) float64 {
 	io.WriteString(h, ":")
 	io.WriteString(h, attr)
 	return float64(h.Sum64()%10000) / 100
+}
+
+// Serve applies rules in order (first full match wins), then Default.
+func (ev *Evaluator) Serve(f *Flag, attrs map[string]any) Outcome {
+	for i := range f.Rules {
+		r := &f.Rules[i]
+		if ev.matchAll(r.Conditions, attrs, false) {
+			return ev.serve(f, r.Serve, r.Name, ReasonRule, attrs)
+		}
+	}
+	return ev.serve(f, f.Default, "", ReasonDefault, attrs)
+}
+
+// Evaluate is Active followed by Serve.
+func (ev *Evaluator) Evaluate(f *Flag, attrs map[string]any, now time.Time) Outcome {
+	if ok, out := f.Active(now); !ok {
+		return out
+	}
+	return ev.Serve(f, attrs)
+}
+
+func (ev *Evaluator) serve(f *Flag, s Serve, detail string, reason Reason, attrs map[string]any) Outcome {
+	if s.Rollout == nil {
+		return Outcome{On: s.On, Variant: f.variant(s.Variant), Reason: reason, Detail: detail}
+	}
+	ro := s.Rollout
+	by := ro.BucketBy
+	if by == "" {
+		by = "tenant"
+	}
+	val := str(attrs[by])
+	if val == "" {
+		return Outcome{Reason: ReasonRollout, Detail: "no bucket attribute"}
+	}
+	seed := ro.Seed
+	if seed == "" {
+		seed = string(f.Feature)
+	}
+	b := bucketOf(seed, val)
+	cum := 0.0
+	for _, p := range ro.Split {
+		if b < cum+p.Percent {
+			return Outcome{On: true, Variant: f.variant(p.Variant), Reason: ReasonRollout, Detail: detail}
+		}
+		cum += p.Percent
+	}
+	return Outcome{Reason: ReasonRollout, Detail: detail}
 }
