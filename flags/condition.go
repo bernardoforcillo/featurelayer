@@ -183,6 +183,12 @@ func str(v any) string {
 	return fmt.Sprint(v)
 }
 
+// ValidSemver reports whether s parses as (lenient) semver 2.0.
+func ValidSemver(s string) bool {
+	_, ok := parseSemver(s)
+	return ok
+}
+
 func toFloat(v any) (float64, bool) {
 	switch n := v.(type) {
 	case int:
