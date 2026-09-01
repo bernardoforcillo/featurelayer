@@ -2,6 +2,7 @@ package flags
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -98,6 +99,7 @@ func (ev *Evaluator) match(c Condition, attrs map[string]any, inSegment bool) bo
 		if !ok {
 			return false
 		}
+		// Fast paths for common slice types
 		switch s := v.(type) {
 		case []string:
 			for _, e := range s {
@@ -114,6 +116,19 @@ func (ev *Evaluator) match(c Condition, attrs map[string]any, inSegment bool) bo
 			}
 			return false
 		}
+		// Generalized slice/array handling using reflect
+		rv := reflect.ValueOf(v)
+		kind := rv.Kind()
+		if kind == reflect.Slice || kind == reflect.Array {
+			for i := 0; i < rv.Len(); i++ {
+				elem := rv.Index(i).Interface()
+				if eqValues(elem, c.Value) {
+					return true
+				}
+			}
+			return false
+		}
+		// String/substring fallback for non-slice values
 		return strings.Contains(str(v), str(c.Value))
 	case StartsWith:
 		return ok && strings.HasPrefix(str(v), str(c.Value))

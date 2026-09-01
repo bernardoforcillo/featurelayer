@@ -6,6 +6,7 @@ func TestMatchBasicOps(t *testing.T) {
 	attrs := map[string]any{
 		"tenant": "acme", "plan": "pro", "seats": 5, "ratio": 2.5,
 		"addons": []string{"extra", "sso"}, "empty": "",
+		"ids": []int{12, 3},
 	}
 	tests := []struct {
 		name string
@@ -25,6 +26,9 @@ func TestMatchBasicOps(t *testing.T) {
 		{"contains substring", Condition{Attribute: "tenant", Op: Contains, Value: "cm"}, true},
 		{"contains slice membership", Condition{Attribute: "addons", Op: Contains, Value: "sso"}, true},
 		{"contains slice miss", Condition{Attribute: "addons", Op: Contains, Value: "billing"}, false},
+		{"contains int slice no substring match", Condition{Attribute: "ids", Op: Contains, Value: 2}, false},
+		{"contains int slice membership", Condition{Attribute: "ids", Op: Contains, Value: 3}, true},
+		{"contains int slice membership first", Condition{Attribute: "ids", Op: Contains, Value: 12}, true},
 		{"startsWith", Condition{Attribute: "plan", Op: StartsWith, Value: "pr"}, true},
 		{"endsWith", Condition{Attribute: "plan", Op: EndsWith, Value: "ro"}, true},
 		{"gt", Condition{Attribute: "seats", Op: Gt, Value: 4}, true},
