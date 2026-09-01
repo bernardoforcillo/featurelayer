@@ -137,19 +137,25 @@ func (r *Resolver) requiresSatisfied(req []PlanID, effective PlanID) bool {
 	return false
 }
 
-// Resolve applies the resolution order: active Deny grant, active
-// grant (its limit replaces), effective plan + effective add-ons
+// Resolve applies the resolution order: active Deny grant (always wins
+// over allow grant for the same feature, regardless of slice order), active
+// allow grant (its limit replaces), effective plan + effective add-ons
 // (limits summed, unlimited dominates), otherwise none.
 func (r *Resolver) Resolve(sub *Subscription, feature catalog.Key, now time.Time) Resolution {
 	if sub == nil {
 		return Resolution{Kind: KindNone}
 	}
+	// First pass: check for active Deny grants (they always win)
 	for _, g := range sub.Grants {
-		if g.Feature != feature || !g.active(now) {
+		if g.Feature != feature || !g.active(now) || !g.Deny {
 			continue
 		}
-		if g.Deny {
-			return Resolution{Kind: KindDenied, Source: g.Reason}
+		return Resolution{Kind: KindDenied, Source: g.Reason}
+	}
+	// Second pass: check for active allow grants
+	for _, g := range sub.Grants {
+		if g.Feature != feature || !g.active(now) || g.Deny {
+			continue
 		}
 		return Resolution{Kind: KindGrant, Source: g.Reason, Limit: g.Limit}
 	}

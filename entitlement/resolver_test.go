@@ -90,6 +90,24 @@ func TestResolveOrder(t *testing.T) {
 		t.Errorf("deny wins: %+v", res)
 	}
 
+	// Deny grant priority: even if allow grant is listed first, deny wins
+	allowBeforeDeny := &Subscription{Plan: "free", Grants: []Grant{
+		Override("export.csv", &Limit{Max: 5}, "promo grant"),
+		{Feature: "export.csv", Deny: true, Reason: "abuse"},
+	}}
+	if res := r.Resolve(allowBeforeDeny, "export.csv", now); res.Kind != KindDenied || res.Source != "abuse" {
+		t.Errorf("deny wins even when allow listed first: %+v", res)
+	}
+
+	// Tie-break within allow grants: first active allow grant wins
+	multiAllow := &Subscription{Plan: "free", Grants: []Grant{
+		Override("export.csv", &Limit{Max: 5}, "first grant"),
+		Override("export.csv", &Limit{Max: 10}, "second grant"),
+	}}
+	if res := r.Resolve(multiAllow, "export.csv", now); res.Kind != KindGrant || res.Limit.Max != 5 {
+		t.Errorf("first allow grant wins: %+v", res)
+	}
+
 	granted := &Subscription{Plan: "free", Grants: []Grant{Override("export.csv", &Limit{Max: 5}, "enterprise deal")}}
 	if res := r.Resolve(granted, "export.csv", now); res.Kind != KindGrant || res.Limit.Max != 5 {
 		t.Errorf("grant replaces plan limit: %+v", res)
