@@ -38,6 +38,19 @@ func WithClock(now func() time.Time) Option {
 	return func(e *Engine) { e.clock = now }
 }
 
+// WithDecisionHook registers fn to run synchronously after every
+// top-level Evaluate/IsEnabled/Variant/Consume/Usage call, in
+// registration order. Hooks must be fast, must not block, and must be
+// safe for concurrent use. Panics are not recovered.
+func WithDecisionHook(fn func(DecisionEvent)) Option {
+	return func(e *Engine) { e.decisionHooks = append(e.decisionHooks, fn) }
+}
+
+// WithApplyHook registers fn to run synchronously after every Apply.
+func WithApplyHook(fn func(ApplyEvent)) Option {
+	return func(e *Engine) { e.applyHooks = append(e.applyHooks, fn) }
+}
+
 // New builds an Engine on the given snapshot. Panics on nil snapshot.
 func New(snap *Snapshot, opts ...Option) *Engine {
 	if snap == nil {
