@@ -284,10 +284,15 @@ func (v *validator) checkPeriodAgreement(cfg Config, planSet map[entitlement.Pla
 		}
 		period[e.Feature] = e.Limit.Period
 	}
-	// flattened plans: the leaf-most limit per feature, via the resolver
+	// flattened plans: the leaf-most limit per feature, via the resolver.
+	// Iterate cfg.Plans in declaration order (not the planSet map, whose
+	// range order is randomized) so the blamed path is deterministic.
 	if r, err := entitlement.NewResolver(cfg.Plans, cfg.AddOns); err == nil {
-		for id, i := range planSet {
-			for j, e := range r.Entitlements(id) {
+		for i, pl := range cfg.Plans {
+			if idx, ok := planSet[pl.ID]; !ok || idx != i {
+				continue // empty/duplicate id already reported elsewhere
+			}
+			for j, e := range r.Entitlements(pl.ID) {
 				record(fmt.Sprintf("plans[%d].entitlements[%d]", i, j), e)
 			}
 		}
@@ -299,7 +304,9 @@ func (v *validator) checkPeriodAgreement(cfg Config, planSet map[entitlement.Pla
 	}
 }
 
-// checkDependencyCycles runs a three-color DFS over DependsOn edges.
+// checkDependencyCycles runs a three-color DFS over DependsOn edges,
+// reporting one error per disjoint cyclic component (not just the
+// first cycle found overall).
 func (v *validator) checkDependencyCycles(features []catalog.Feature) {
 	idx := map[catalog.Key]int{}
 	for i, f := range features {
@@ -311,9 +318,11 @@ func (v *validator) checkDependencyCycles(features []catalog.Feature) {
 		black = 2
 	)
 	color := make([]int, len(features))
+	var stack []int
 	var visit func(i int) bool
 	visit = func(i int) bool {
 		color[i] = gray
+		stack = append(stack, i)
 		for _, dep := range features[i].DependsOn {
 			j, ok := idx[dep]
 			if !ok || dep == features[i].Key {
@@ -327,12 +336,23 @@ func (v *validator) checkDependencyCycles(features []catalog.Feature) {
 			}
 		}
 		color[i] = black
+		stack = stack[:len(stack)-1]
 		return true
 	}
 	for i := range features {
-		if color[i] == white && !visit(i) {
+		if color[i] != white {
+			continue
+		}
+		stack = stack[:0]
+		if !visit(i) {
 			v.add(fmt.Sprintf("features[%d].dependsOn", i), "dependency cycle involving %q", features[i].Key)
-			return
+			// Mark every node left on the recursion stack (the gray
+			// nodes of this cyclic component) black so the same cycle
+			// is not re-reported through another entry point, then
+			// keep scanning for further disjoint components.
+			for _, j := range stack {
+				color[j] = black
+			}
 		}
 	}
 }

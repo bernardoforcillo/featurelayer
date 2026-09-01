@@ -55,6 +55,16 @@ func TestValidation(t *testing.T) {
 	}}
 	wantErr(t, cyc, "features[0].dependsOn")
 
+	// two disjoint cycles must both be reported, not just the first found
+	disjointCycles := Config{Features: []catalog.Feature{
+		{Key: "a", Lifecycle: catalog.GA, DependsOn: []catalog.Key{"b"}},
+		{Key: "b", Lifecycle: catalog.GA, DependsOn: []catalog.Key{"a"}},
+		{Key: "c", Lifecycle: catalog.GA, DependsOn: []catalog.Key{"d"}},
+		{Key: "d", Lifecycle: catalog.GA, DependsOn: []catalog.Key{"c"}},
+	}}
+	wantErr(t, disjointCycles, "features[0].dependsOn")
+	wantErr(t, disjointCycles, "features[2].dependsOn")
+
 	seg := func(s flags.Segment) Config {
 		return Config{Features: []catalog.Feature{feat("a")}, Segments: []flags.Segment{s}}
 	}
@@ -125,6 +135,15 @@ func TestValidation(t *testing.T) {
 		[]entitlement.AddOn{{ID: "x", Entitlements: []entitlement.Entitlement{entitlement.Limited("a", 5, entitlement.Day)}}},
 	)
 	wantErr(t, disagree, "addons[0].entitlements[0].limit.period")
+
+	// period disagreement between two plans must deterministically blame
+	// the second (declaration order), not whichever the map happened to
+	// range over first
+	planDisagree := pl([]entitlement.Plan{
+		{ID: "p", Entitlements: []entitlement.Entitlement{entitlement.Limited("a", 10, entitlement.Month)}},
+		{ID: "q", Entitlements: []entitlement.Entitlement{entitlement.Limited("a", 10, entitlement.Day)}},
+	}, nil)
+	wantErr(t, planDisagree, "plans[1].entitlements[0].limit.period")
 
 	// multiple problems reported at once
 	_, err := NewSnapshot(Config{Features: []catalog.Feature{{Key: "Bad!"}, {Key: "also bad"}}})
