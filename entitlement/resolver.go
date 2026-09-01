@@ -92,8 +92,28 @@ func NewResolver(plans []Plan, addons []AddOn) (*Resolver, error) {
 	return r, nil
 }
 
-// Entitlements returns the flattened entitlements of a plan.
-func (r *Resolver) Entitlements(id PlanID) []Entitlement { return r.flat[id] }
+// Entitlements returns the flattened entitlements of a plan, deep
+// copied so a caller mutating the result (including through a Limit
+// pointer) can never reach the resolver's internal state or another
+// caller's copy.
+func (r *Resolver) Entitlements(id PlanID) []Entitlement { return cloneEntitlements(r.flat[id]) }
+
+// cloneEntitlements deep-copies a flattened entitlement slice: a fresh
+// backing array, and a fresh Limit allocation per non-nil pointer.
+func cloneEntitlements(es []Entitlement) []Entitlement {
+	if es == nil {
+		return nil
+	}
+	out := make([]Entitlement, len(es))
+	for i, e := range es {
+		if e.Limit != nil {
+			lim := *e.Limit
+			e.Limit = &lim
+		}
+		out[i] = e
+	}
+	return out
+}
 
 // EffectivePlan is the trial plan while active, else the base plan.
 func (r *Resolver) EffectivePlan(sub *Subscription, now time.Time) PlanID {
