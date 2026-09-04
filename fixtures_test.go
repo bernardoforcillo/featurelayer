@@ -68,3 +68,8 @@ func fullTestConfig() Config {
 		},
 	}
 }
+
+// usageKeyFor is the tenant-scoped monthly counter key at tNow.
+func usageKeyFor(tenant string, feature catalog.Key) entitlement.UsageKey {
+	return entitlement.UsageKey{Tenant: tenant, Feature: feature, Period: entitlement.PeriodKey(entitlement.Month, time.Time{}, tNow)}
+}
