@@ -1,0 +1,37 @@
+{
+  "features": [
+    {"key": "export.csv", "name": "CSV export", "lifecycle": "ga", "owner": "data-team", "tags": ["export"]},
+    {"key": "api.calls", "lifecycle": "ga"},
+    {"key": "ai.tokens", "lifecycle": "beta"},
+    {"key": "new-editor", "lifecycle": "beta", "free": true}
+  ],
+  "segments": [
+    {"key": "design-partners", "rules": [
+      {"conditions": [{"attribute": "tenant", "op": "in", "values": ["acme", "globex"]}]}
+    ]}
+  ],
+  "flags": [
+    {"feature": "export.csv", "enabled": true,
+     "rules": [
+       {"name": "partners", "conditions": [{"op": "inSegment", "value": "design-partners"}], "serve": {"on": true}},
+       {"name": "no-bots", "conditions": [{"attribute": "principal_kind", "op": "eq", "value": "service_account"}], "serve": {"on": false}}
+     ],
+     "default": {"on": false, "rollout": {"split": [{"percent": 20}]}}},
+    {"feature": "new-editor", "enabled": true, "default": {"on": false, "rollout": {"split": [{"percent": 50}]}}}
+  ],
+  "plans": [
+    {"id": "free", "entitlements": [
+      {"feature": "api.calls", "limit": {"max": 100, "period": "month"}}
+    ]},
+    {"id": "pro", "extends": "free", "entitlements": [
+      {"feature": "export.csv"},
+      {"feature": "api.calls", "limit": {"max": 1000, "period": "month"}},
+      {"feature": "ai.tokens", "limit": {"max": 5000, "period": "day", "per": "subject"}}
+    ]}
+  ],
+  "addons": [
+    {"id": "extra-calls", "requires": ["pro"], "entitlements": [
+      {"feature": "api.calls", "limit": {"max": 500, "period": "month"}}
+    ]}
+  ]
+}

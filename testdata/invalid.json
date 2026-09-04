@@ -1,0 +1,14 @@
+{
+  "features": [
+    {"key": "export.csv", "lifecycle": "ga"},
+    {"key": "Bad Key", "lifecycle": "ga"}
+  ],
+  "flags": [
+    {"feature": "ghost", "enabled": true, "default": {"on": true}}
+  ],
+  "plans": [
+    {"id": "pro", "extends": "nope", "entitlements": [
+      {"feature": "export.csv", "limit": {"max": 10, "period": "fortnight", "per": "user"}}
+    ]}
+  ]
+}
