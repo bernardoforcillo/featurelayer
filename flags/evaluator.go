@@ -74,9 +74,10 @@ func (ev *Evaluator) InSegment(key string, attrs map[string]any) bool {
 // a public contract; changing it would reshuffle every live rollout.
 func bucketOf(seed, attr string) float64 {
 	h := fnv.New64a()
-	io.WriteString(h, seed)
-	io.WriteString(h, ":")
-	io.WriteString(h, attr)
+	// hash.Hash writes never fail; the errors are discarded explicitly.
+	_, _ = io.WriteString(h, seed)
+	_, _ = io.WriteString(h, ":")
+	_, _ = io.WriteString(h, attr)
 	return float64(h.Sum64()%10000) / 100
 }
 

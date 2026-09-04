@@ -44,7 +44,7 @@ func LoadFile(path string) (*Snapshot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("featurelayer: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // read-only: a Close error carries no information
 	return LoadJSON(f)
 }
 

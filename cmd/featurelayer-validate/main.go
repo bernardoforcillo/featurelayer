@@ -31,8 +31,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	quiet := fs.Bool("q", false, "print nothing on success")
 	fs.Usage = func() {
-		fmt.Fprintln(stderr, "usage: featurelayer-validate [-q] [path | -]")
-		fmt.Fprintln(stderr, "Validates a featurelayer JSON config; reads stdin when no path (or \"-\") is given.")
+		say(stderr, "usage: featurelayer-validate [-q] [path | -]\n")
+		say(stderr, "Validates a featurelayer JSON config; reads stdin when no path (or \"-\") is given.\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -59,7 +59,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 	if !*quiet {
-		fmt.Fprintf(stdout, "%s: ok — %d features, %d segments, %d flags, %d plans, %d addons\n",
+		say(stdout, "%s: ok — %d features, %d segments, %d flags, %d plans, %d addons\n",
 			name, len(snap.Features()), len(snap.Segments()), countFlags(snap), len(snap.Plans()), len(snap.AddOns()))
 	}
 	return 0
@@ -78,14 +78,21 @@ func report(w io.Writer, name string, err error) {
 		var ve *featurelayer.ValidationError
 		if errors.As(e, &ve) {
 			n++
-			fmt.Fprintf(w, "%s: %s: %s\n", name, ve.Path, ve.Msg)
+			say(w, "%s: %s: %s\n", name, ve.Path, ve.Msg)
 			continue
 		}
-		fmt.Fprintf(w, "%s: %v\n", name, e)
+		say(w, "%s: %v\n", name, e)
 	}
 	if n > 0 {
-		fmt.Fprintf(w, "%s: invalid — %d problem(s)\n", name, n)
+		say(w, "%s: invalid — %d problem(s)\n", name, n)
 	}
+}
+
+// say writes to a CLI stream. A write error on stdout/stderr has no
+// useful handling in a command that is about to exit, so it is
+// deliberately dropped.
+func say(w io.Writer, format string, args ...any) {
+	_, _ = fmt.Fprintf(w, format, args...)
 }
 
 // countFlags counts flags through the features: Snapshot exposes flags

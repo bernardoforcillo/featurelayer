@@ -22,7 +22,7 @@ func TestApplyConcurrentWithEvaluate(t *testing.T) {
 					return
 				default:
 					e.Evaluate(ctx, "export.csv", EvalContext{TenantID: "acme"})
-					e.Consume(ctx, "api.calls", EvalContext{TenantID: "acme"}, 1)
+					_, _ = e.Consume(ctx, "api.calls", EvalContext{TenantID: "acme"}, 1)
 				}
 			}
 		}()
