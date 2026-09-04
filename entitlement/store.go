@@ -7,9 +7,15 @@ import (
 	"github.com/bernardoforcillo/featurelayer/catalog"
 )
 
-// ErrNoSubscription is returned by SubscriptionStore implementations
-// when the tenant is unknown.
-var ErrNoSubscription = errors.New("entitlement: no subscription")
+var (
+	// ErrNoSubscription is returned by SubscriptionStore implementations
+	// when the tenant is unknown.
+	ErrNoSubscription = errors.New("entitlement: no subscription")
+	// ErrEmptyTenantID is returned by Seeder.Set for a Subscription with
+	// no TenantID: such a row could never be read back and the engine
+	// refuses empty tenants anyway, so storing it would be a silent leak.
+	ErrEmptyTenantID = errors.New("entitlement: empty tenant id")
+)
 
 // SubscriptionStore resolves a tenant's subscription. Implementations
 // must be safe for concurrent use.
@@ -20,8 +26,11 @@ type SubscriptionStore interface {
 // Seeder is the write side a SubscriptionStore may offer. It exists so
 // the entitlementtest contract suite (and application code seeding
 // tenants) can write through the same store it reads from. Set
-// replaces the tenant's subscription wholesale (upsert); Delete
-// removes it and is a no-op for an unknown tenant.
+// replaces the tenant's subscription wholesale (upsert) and MUST
+// return ErrEmptyTenantID for an empty TenantID; Delete removes it and
+// is a no-op for an unknown tenant. Both MUST copy what they are handed
+// and what they return: a caller mutating a Subscription after Set, or
+// one returned by Subscription, must never reach the stored state.
 type Seeder interface {
 	Set(ctx context.Context, sub Subscription) error
 	Delete(ctx context.Context, tenantID string) error

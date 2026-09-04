@@ -44,6 +44,31 @@ func Trial(feature catalog.Key, until time.Time, reason string) Grant {
 	return Grant{Feature: feature, Until: until, Reason: reason}
 }
 
+// clone deep-copies s: fresh slices, a fresh PlanTrial and fresh Limit
+// allocations, so neither side of a store boundary can reach the other
+// through a pointer.
+func (s Subscription) clone() Subscription {
+	if s.AddOns != nil {
+		s.AddOns = append([]AddOnID(nil), s.AddOns...)
+	}
+	if s.Trial != nil {
+		t := *s.Trial
+		s.Trial = &t
+	}
+	if s.Grants != nil {
+		grants := make([]Grant, len(s.Grants))
+		for i, g := range s.Grants {
+			if g.Limit != nil {
+				l := *g.Limit
+				g.Limit = &l
+			}
+			grants[i] = g
+		}
+		s.Grants = grants
+	}
+	return s
+}
+
 // active reports whether the grant applies at now.
 func (g Grant) active(now time.Time) bool {
 	return g.Until.IsZero() || now.Before(g.Until)

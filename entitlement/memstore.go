@@ -17,11 +17,12 @@ func NewMemSubscriptions() *MemSubscriptions {
 	return &MemSubscriptions{m: make(map[string]Subscription)}
 }
 
-// Set stores (or replaces) sub under sub.TenantID.
+// Set stores (or replaces) a deep copy of sub under sub.TenantID, so
+// mutating sub afterwards never reaches the store.
 func (s *MemSubscriptions) Set(sub Subscription) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.m[sub.TenantID] = sub
+	s.m[sub.TenantID] = sub.clone()
 }
 
 // Delete forgets the tenant; unknown tenants are a no-op.
@@ -31,8 +32,9 @@ func (s *MemSubscriptions) Delete(tenantID string) {
 	delete(s.m, tenantID)
 }
 
-// Subscription returns a shallow copy: callers must not mutate values
-// referenced through pointers (grant limits, trial).
+// Subscription returns a deep copy: the caller may mutate it freely,
+// including through the grant limits and the trial, without reaching
+// the stored value or another caller's copy.
 func (s *MemSubscriptions) Subscription(_ context.Context, tenantID string) (*Subscription, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -40,6 +42,7 @@ func (s *MemSubscriptions) Subscription(_ context.Context, tenantID string) (*Su
 	if !ok {
 		return nil, ErrNoSubscription
 	}
+	sub = sub.clone()
 	return &sub, nil
 }
 
@@ -52,6 +55,9 @@ func (s *MemSubscriptions) Seeder() Seeder { return memSeeder{s} }
 type memSeeder struct{ s *MemSubscriptions }
 
 func (m memSeeder) Set(_ context.Context, sub Subscription) error {
+	if sub.TenantID == "" {
+		return ErrEmptyTenantID
+	}
 	m.s.Set(sub)
 	return nil
 }
