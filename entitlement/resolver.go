@@ -12,6 +12,7 @@ import (
 // in the snapshot. Resolution fails closed and carries this in Err.
 var ErrUnknownPlan = errors.New("entitlement: unknown plan")
 
+// Kind names the source that decided a Resolution.
 type Kind string
 
 const (
@@ -213,16 +214,21 @@ func (r *Resolver) Resolve(sub *Subscription, feature catalog.Key, now time.Time
 }
 
 // sumLimits sums Max across sources; any nil (unlimited) dominates.
-// Periods are equal by snapshot validation.
+// Periods and scopes are equal by snapshot validation ("" and
+// PerTenant count as equal); an explicit scope wins over an empty one.
 func sumLimits(limits []*Limit) *Limit {
 	var total int64
 	var period Period
+	var scope LimitScope
 	for _, l := range limits {
 		if l == nil {
 			return nil
 		}
 		total += l.Max
 		period = l.Period
+		if l.Per != "" {
+			scope = l.Per
+		}
 	}
-	return &Limit{Max: total, Period: period}
+	return &Limit{Max: total, Period: period, Per: scope}
 }

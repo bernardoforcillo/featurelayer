@@ -41,8 +41,10 @@ func (e *Engine) consume(ctx context.Context, key catalog.Key, ec EvalContext, n
 	if !d.Enabled {
 		return d, nil
 	}
-	period, max, anchor := meterParams(d, sc)
-	uk := entitlement.UsageKey{Tenant: ec.TenantID, Feature: key, Period: entitlement.PeriodKey(period, anchor, now)}
+	uk, max, period, anchor, ok := e.meterKey(&d, ec, sc, now)
+	if !ok {
+		return d, nil
+	}
 	total, allowed, err := e.usage.Increment(ctx, uk, n, max)
 	if err != nil {
 		d.Enabled, d.Reason, d.Err = false, ReasonStoreError, err
@@ -74,8 +76,10 @@ func (e *Engine) usageRead(ctx context.Context, key catalog.Key, ec EvalContext)
 	if !d.Enabled {
 		return d, nil
 	}
-	period, max, anchor := meterParams(d, sc)
-	uk := entitlement.UsageKey{Tenant: ec.TenantID, Feature: key, Period: entitlement.PeriodKey(period, anchor, now)}
+	uk, max, period, anchor, ok := e.meterKey(&d, ec, sc, now)
+	if !ok {
+		return d, nil
+	}
 	total, err := e.usage.Get(ctx, uk)
 	if err != nil {
 		d.Enabled, d.Reason, d.Err = false, ReasonStoreError, err
@@ -85,18 +89,40 @@ func (e *Engine) usageRead(ctx context.Context, key catalog.Key, ec EvalContext)
 	return d, nil
 }
 
-// meterParams extracts the effective limit and billing anchor from an
-// enabled decision. No entitlement (Free / flags-only) = unlimited.
-func meterParams(d Decision, sc *subCache) (entitlement.Period, int64, time.Time) {
-	period, max := entitlement.None, int64(-1)
+// meterKey derives the usage counter for an enabled decision: the
+// effective limit and billing anchor, plus the counter's key. No
+// entitlement (Free / flags-only) = unlimited, tenant-scoped.
+//
+// A PerSubject limit meters EvalContext.UserID. Without a subject
+// there is no counter to charge, and charging the tenant's shared
+// counter instead would silently widen the limit, so the decision is
+// turned off (Reason not_entitled, Detail "no subject") and ok is
+// false. An unknown scope (only reachable through a Grant, which
+// snapshot validation never sees) fails closed the same way.
+func (e *Engine) meterKey(d *Decision, ec EvalContext, sc *subCache, now time.Time) (uk entitlement.UsageKey, max int64, period entitlement.Period, anchor time.Time, ok bool) {
+	period, max = entitlement.None, -1
+	scope := entitlement.PerTenant
 	if d.Entitlement != nil && d.Entitlement.Limit != nil {
-		period, max = d.Entitlement.Limit.Period, d.Entitlement.Limit.Max
+		l := d.Entitlement.Limit
+		period, max, scope = l.Period, l.Max, l.Scope()
 	}
-	var anchor time.Time
 	if sc.sub != nil {
 		anchor = sc.sub.BillingAnchor
 	}
-	return period, max, anchor
+	uk = entitlement.UsageKey{Tenant: ec.TenantID, Feature: d.Feature, Period: entitlement.PeriodKey(period, anchor, now)}
+	switch scope {
+	case entitlement.PerTenant:
+	case entitlement.PerSubject:
+		if ec.UserID == "" {
+			d.Enabled, d.Reason, d.Detail, d.Variant = false, ReasonNotEntitled, "no subject", nil
+			return uk, max, period, anchor, false
+		}
+		uk.Subject = ec.UserID
+	default:
+		d.Enabled, d.Reason, d.Detail, d.Variant = false, ReasonNotEntitled, "invalid limit scope", nil
+		return uk, max, period, anchor, false
+	}
+	return uk, max, period, anchor, true
 }
 
 func usageInfo(total, max int64, period entitlement.Period, anchor, now time.Time, key string) *UsageInfo {

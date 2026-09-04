@@ -35,6 +35,7 @@ func fullTestConfig() Config {
 			{Key: "killed.feature", Lifecycle: catalog.GA, Free: true},
 			{Key: "windowed.feature", Lifecycle: catalog.GA, Free: true},
 			{Key: "plain.feature", Lifecycle: catalog.GA, Free: true},
+			{Key: "ai.tokens", Lifecycle: catalog.GA},
 		},
 		Segments: []flags.Segment{
 			{Key: "beta-testers", Rules: []flags.SegmentRule{
@@ -59,6 +60,7 @@ func fullTestConfig() Config {
 			{ID: "pro", Extends: "free", Entitlements: []entitlement.Entitlement{
 				{Feature: "export.csv"},
 				entitlement.Limited("api.calls", 1000, entitlement.Month),
+				entitlement.LimitedPer("ai.tokens", 10, entitlement.Day, entitlement.PerSubject),
 			}},
 		},
 		AddOns: []entitlement.AddOn{

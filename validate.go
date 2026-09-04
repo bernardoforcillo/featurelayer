@@ -264,18 +264,32 @@ func (v *validator) checkEntitlements(path string, ents []entitlement.Entitlemen
 			if !l.Period.Valid() {
 				v.add(p+".limit.period", "invalid period %q", l.Period)
 			}
+			if !l.Per.Valid() {
+				v.add(p+".limit.per", "invalid scope %q", l.Per)
+			}
 		}
 	}
 }
 
 // checkPeriodAgreement: across every flattened plan and every addon
-// that set a Limit for the same feature, the Period must be identical.
+// that set a Limit for the same feature, the Period must be identical,
+// and so must the scope (Per; "" and PerTenant are the same scope).
+// The resolver sums such limits, and a sum across different periods
+// or across a per-tenant and a per-subject counter has no meaning.
 func (v *validator) checkPeriodAgreement(cfg Config, planSet map[entitlement.PlanID]int) {
 	period := map[catalog.Key]entitlement.Period{}
+	scope := map[catalog.Key]entitlement.LimitScope{}
 	fix := map[catalog.Key]bool{}
+	fixScope := map[catalog.Key]bool{}
 	record := func(path string, e entitlement.Entitlement) {
-		if e.Limit == nil || !e.Limit.Period.Valid() {
+		if e.Limit == nil || !e.Limit.Period.Valid() || !e.Limit.Per.Valid() {
 			return
+		}
+		if sc, ok := scope[e.Feature]; ok && sc != e.Limit.Scope() && !fixScope[e.Feature] {
+			v.add(path+".limit.per", "scope %q disagrees with %q used elsewhere for feature %q", e.Limit.Scope(), sc, e.Feature)
+			fixScope[e.Feature] = true
+		} else {
+			scope[e.Feature] = e.Limit.Scope()
 		}
 		if p, ok := period[e.Feature]; ok && p != e.Limit.Period && !fix[e.Feature] {
 			v.add(path+".limit.period", "period %q disagrees with %q used elsewhere for feature %q", e.Limit.Period, p, e.Feature)

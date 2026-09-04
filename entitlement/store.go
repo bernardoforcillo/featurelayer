@@ -17,11 +17,24 @@ type SubscriptionStore interface {
 	Subscription(ctx context.Context, tenantID string) (*Subscription, error)
 }
 
-// UsageKey identifies one usage counter.
+// Seeder is the write side a SubscriptionStore may offer. It exists so
+// the entitlementtest contract suite (and application code seeding
+// tenants) can write through the same store it reads from. Set
+// replaces the tenant's subscription wholesale (upsert); Delete
+// removes it and is a no-op for an unknown tenant.
+type Seeder interface {
+	Set(ctx context.Context, sub Subscription) error
+	Delete(ctx context.Context, tenantID string) error
+}
+
+// UsageKey identifies one usage counter. Subject is empty for
+// tenant-scoped counters and the EvalContext.UserID for PerSubject
+// limits; two keys differing only in Subject are distinct counters.
 type UsageKey struct {
 	Tenant  string
 	Feature catalog.Key
 	Period  string // "" or a PeriodKey value
+	Subject string // "" for PerTenant limits
 }
 
 // UsageStore holds metering counters. Implementations must make

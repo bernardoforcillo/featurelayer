@@ -12,16 +12,19 @@ type MemSubscriptions struct {
 	m  map[string]Subscription
 }
 
+// NewMemSubscriptions returns an empty store.
 func NewMemSubscriptions() *MemSubscriptions {
 	return &MemSubscriptions{m: make(map[string]Subscription)}
 }
 
+// Set stores (or replaces) sub under sub.TenantID.
 func (s *MemSubscriptions) Set(sub Subscription) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.m[sub.TenantID] = sub
 }
 
+// Delete forgets the tenant; unknown tenants are a no-op.
 func (s *MemSubscriptions) Delete(tenantID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -40,22 +43,43 @@ func (s *MemSubscriptions) Subscription(_ context.Context, tenantID string) (*Su
 	return &sub, nil
 }
 
+// Seeder adapts the store to the Seeder interface: the context-taking
+// Set and Delete the entitlementtest contract suite writes through.
+// Go has no overloading, so the existing Set/Delete keep their
+// signatures and this adapter carries the ctx-taking pair.
+func (s *MemSubscriptions) Seeder() Seeder { return memSeeder{s} }
+
+type memSeeder struct{ s *MemSubscriptions }
+
+func (m memSeeder) Set(_ context.Context, sub Subscription) error {
+	m.s.Set(sub)
+	return nil
+}
+
+func (m memSeeder) Delete(_ context.Context, tenantID string) error {
+	m.s.Delete(tenantID)
+	return nil
+}
+
 // MemUsage is an in-memory UsageStore.
 type MemUsage struct {
 	mu sync.Mutex
 	m  map[UsageKey]int64
 }
 
+// NewMemUsage returns an empty usage store.
 func NewMemUsage() *MemUsage {
 	return &MemUsage{m: make(map[UsageKey]int64)}
 }
 
+// Get returns the counter, 0 for an unknown key.
 func (u *MemUsage) Get(_ context.Context, key UsageKey) (int64, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	return u.m[key], nil
 }
 
+// Increment implements UsageStore.Increment under one mutex.
 func (u *MemUsage) Increment(_ context.Context, key UsageKey, delta, max int64) (int64, bool, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()

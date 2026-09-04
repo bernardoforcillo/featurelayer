@@ -155,3 +155,28 @@ func TestResolveOrder(t *testing.T) {
 		t.Errorf("effective addons: %v", addons)
 	}
 }
+
+func TestResolveCarriesLimitScope(t *testing.T) {
+	r, err := NewResolver(
+		[]Plan{{ID: "pro", Entitlements: []Entitlement{LimitedPer("ai.tokens", 10, Day, PerSubject)}}},
+		[]AddOn{{ID: "more", Entitlements: []Entitlement{LimitedPer("ai.tokens", 5, Day, PerSubject)}}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sub := &Subscription{Plan: "pro", AddOns: []AddOnID{"more"}}
+	res := r.Resolve(sub, "ai.tokens", now)
+	if res.Kind != KindPlan || res.Limit == nil || res.Limit.Max != 15 || res.Limit.Per != PerSubject {
+		t.Errorf("summed per-subject limit: %+v %+v", res, res.Limit)
+	}
+	// An explicit scope on one source wins over an empty one on another
+	// (they mean the same thing; validation rejects real disagreement).
+	r, _ = NewResolver(
+		[]Plan{{ID: "pro", Entitlements: []Entitlement{Limited("api.calls", 10, Month)}}},
+		[]AddOn{{ID: "more", Entitlements: []Entitlement{LimitedPer("api.calls", 5, Month, PerTenant)}}},
+	)
+	res = r.Resolve(&Subscription{Plan: "pro", AddOns: []AddOnID{"more"}}, "api.calls", now)
+	if res.Limit == nil || res.Limit.Max != 15 || res.Limit.Scope() != PerTenant {
+		t.Errorf("tenant-scoped sum: %+v", res.Limit)
+	}
+}

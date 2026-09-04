@@ -154,3 +154,40 @@ func TestValidation(t *testing.T) {
 		t.Errorf("Error() must carry paths: %v", err)
 	}
 }
+
+func TestValidationLimitScope(t *testing.T) {
+	limit := func(per entitlement.LimitScope) *entitlement.Limit {
+		return &entitlement.Limit{Max: 5, Period: entitlement.Month, Per: per}
+	}
+	wantErr(t, Config{
+		Features: []catalog.Feature{feat("a")},
+		Plans:    []entitlement.Plan{{ID: "p", Entitlements: []entitlement.Entitlement{{Feature: "a", Limit: limit("user")}}}},
+	}, "plans[0].entitlements[0].limit.per")
+	wantErr(t, Config{
+		Features: []catalog.Feature{feat("a")},
+		AddOns:   []entitlement.AddOn{{ID: "x", Entitlements: []entitlement.Entitlement{{Feature: "a", Limit: limit("user")}}}},
+	}, "addons[0].entitlements[0].limit.per")
+	// per-tenant and per-subject limits for one feature cannot be summed
+	wantErr(t, Config{
+		Features: []catalog.Feature{feat("a")},
+		Plans:    []entitlement.Plan{{ID: "p", Entitlements: []entitlement.Entitlement{{Feature: "a", Limit: limit(entitlement.PerSubject)}}}},
+		AddOns:   []entitlement.AddOn{{ID: "x", Entitlements: []entitlement.Entitlement{{Feature: "a", Limit: limit("")}}}},
+	}, "addons[0].entitlements[0].limit.per")
+	// "" and PerTenant are the same scope; both spellings agree
+	ok := Config{
+		Features: []catalog.Feature{feat("a")},
+		Plans:    []entitlement.Plan{{ID: "p", Entitlements: []entitlement.Entitlement{{Feature: "a", Limit: limit(entitlement.PerTenant)}}}},
+		AddOns:   []entitlement.AddOn{{ID: "x", Entitlements: []entitlement.Entitlement{{Feature: "a", Limit: limit("")}}}},
+	}
+	if _, err := NewSnapshot(ok); err != nil {
+		t.Errorf("tenant and empty scope must agree: %v", err)
+	}
+	// per-subject everywhere is fine, and survives JSON
+	ok = Config{
+		Features: []catalog.Feature{feat("a")},
+		Plans:    []entitlement.Plan{{ID: "p", Entitlements: []entitlement.Entitlement{entitlement.LimitedPer("a", 1, entitlement.Day, entitlement.PerSubject)}}},
+	}
+	if _, err := NewSnapshot(ok); err != nil {
+		t.Errorf("per-subject config must validate: %v", err)
+	}
+}
